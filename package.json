@@ -2,7 +2,7 @@
   "name": "nanosdk-vscode",
   "displayName": "NanoSDK",
   "description": "Full NanoSDK language support for MicroOS: syntax highlighting, real-time error checking, compilation to .nsa, and interactive Micro Paint .mpi icon creator.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "Cryptid",
   "icon": "icon.png",
   "repository": {"url": "https://github.com/NotCryptid/Nanosdk-vscode"},

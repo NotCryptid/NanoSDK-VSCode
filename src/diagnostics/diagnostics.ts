@@ -385,6 +385,9 @@ export function updateDiagnostics(
                 if (args.length < 3) {
                     diagnostics.push(createLineDiag(item.lineIndex, item.text, "VRM requires: [var_name] [add|sub|mul|div] [number] (e.g. VRM count add 001).", vscode.DiagnosticSeverity.Error));
                 } else {
+                    if (/^[0-9]/.test(args[0])) {
+                        diagnostics.push(createLineDiag(item.lineIndex, item.text, `VRM variable name '${args[0]}' cannot start with a digit.`, vscode.DiagnosticSeverity.Error));
+                    }
                     const op = args[1].toLowerCase();
                     if (op !== 'add' && op !== 'sub' && op !== 'mul' && op !== 'div') {
                         diagnostics.push(createLineDiag(item.lineIndex, item.text, `Invalid VRM operator '${args[1]}'. Allowed operations: 'add', 'sub', 'mul', 'div'.`, vscode.DiagnosticSeverity.Error));

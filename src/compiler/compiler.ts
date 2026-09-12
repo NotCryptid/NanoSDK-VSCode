@@ -384,6 +384,10 @@ export async function compileNanoSDK(
                     errors.push(`Line ${li + 5}: VRM requires variable name, operation (add/sub/mul/div), and value.`);
                     break;
                 }
+                if (/^[0-9]/.test(a[0])) {
+                    errors.push(`Line ${li + 5}: VRM variable name '${a[0]}' cannot start with a digit.`);
+                    break;
+                }
                 {
                     const op = a[1].toLowerCase();
                     if (op !== 'add' && op !== 'sub' && op !== 'mul' && op !== 'div') {
@@ -394,9 +398,9 @@ export async function compileNanoSDK(
                         errors.push(`Line ${li + 5}: VRM value '${a[2]}' must be a number or variable reference (!var!).`);
                         break;
                     }
+                    out.push('503§' + nsc_pad(a[0]) + '§' + op + '§' + nsc_pad(a[2]));
+                    continue;
                 }
-                out.push('503§' + nsc_pad(a[0]) + '§' + nsc_pad(a[1]) + '§' + nsc_pad(a[2]));
-                continue;
             case 'VCJ':
                 if (a.length < 1) {
                     errors.push(`Line ${li + 5}: VCJ requires variable name and text/variable to append.`);
