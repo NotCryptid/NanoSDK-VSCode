@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { compileNanoSDK, nsc_pad } from './compiler/compiler';
 import { decompileNSA } from './compiler/decompiler';
+import { runInRuntime } from './runtime/runtimePanel';
 import { updateDiagnostics } from './diagnostics/diagnostics';
 import { NanoSDKHoverProvider } from './language/hover';
 import { NanoSDKCompletionProvider } from './language/completion';
@@ -125,6 +126,31 @@ export function activate(context: vscode.ExtensionContext) {
             } else if (action === 'Open Folder') {
                 vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(nsaPath));
             }
+        })
+    );
+
+    // Command: Run in the built-in NanoSDK runtime (compiles .nsp first, or runs a .nsa directly)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nanosdk.run', async (uri?: vscode.Uri) => {
+            const targetUri = uri || vscode.window.activeTextEditor?.document.uri;
+            if (!targetUri) {
+                vscode.window.showErrorMessage('Open a NanoSDK (.nsp) or compiled (.nsa) file to run.');
+                return;
+            }
+            const ext = path.extname(targetUri.fsPath).toLowerCase();
+            const baseName = path.basename(targetUri.fsPath, ext);
+            if (ext === '.nsa') {
+                const content = fs.readFileSync(targetUri.fsPath, 'utf8');
+                runInRuntime(context, content, content.split('~')[0] || baseName, targetUri.fsPath);
+                return;
+            }
+            const doc = await vscode.workspace.openTextDocument(targetUri);
+            const res = await compileNanoSDK(doc.getText(), { sourceFilePath: targetUri.fsPath });
+            if (!res.success || !res.nsaContent) {
+                vscode.window.showErrorMessage(`NanoSDK Compilation Failed:\n${res.errors.join('\n')}`);
+                return;
+            }
+            runInRuntime(context, res.nsaContent, res.metadata?.appName || baseName, targetUri.fsPath);
         })
     );
 

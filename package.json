@@ -2,10 +2,12 @@
   "name": "nanosdk-vscode",
   "displayName": "NanoSDK",
   "description": "Full NanoSDK language support for MicroOS: syntax highlighting, real-time error checking, compilation to .nsa, and interactive Micro Paint .mpi icon creator.",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "publisher": "Cryptid",
   "icon": "icon.png",
-  "repository": {"url": "https://github.com/NotCryptid/Nanosdk-vscode"},
+  "repository": {
+    "url": "https://github.com/NotCryptid/Nanosdk-vscode"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -28,7 +30,8 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:nanosdk",
-    "onCustomEditor:nanosdk.microPaintEditor"
+    "onCustomEditor:nanosdk.microPaintEditor",
+    "onCommand:nanosdk.run"
   ],
   "contributes": {
     "languages": [
@@ -117,6 +120,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "nanosdk.run",
+        "title": "Run in NanoSDK Runtime",
+        "category": "NanoSDK",
+        "icon": "$(debug-start)"
+      },
+      {
         "command": "nanosdk.openIconCreator",
         "title": "Open Micro Paint Icon Creator",
         "category": "NanoSDK",
@@ -150,6 +159,11 @@
     "menus": {
       "editor/title": [
         {
+          "command": "nanosdk.run",
+          "when": "editorLangId == nanosdk",
+          "group": "navigation@0"
+        },
+        {
           "command": "nanosdk.compile",
           "when": "editorLangId == nanosdk",
           "group": "navigation@1"
@@ -170,6 +184,11 @@
           "command": "nanosdk.decompile",
           "when": "resourceExtname == .nsa",
           "group": "7_modification@2"
+        },
+        {
+          "command": "nanosdk.run",
+          "when": "resourceExtname == .nsp || resourceExtname == .nsa",
+          "group": "7_modification@0"
         }
       ],
       "editor/context": [
