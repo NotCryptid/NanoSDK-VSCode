@@ -70,7 +70,7 @@ LOP end`;
         assert.ok(parts.includes('309§a'), 'Should contain LGH auto (309§a)');
         assert.ok(parts.includes('304§Count: !count!§Add§Reset'), 'Should contain LGO str3 (304§...)');
         assert.ok(parts.includes('401§sel§002'), 'Should contain WHN sel 002');
-        assert.ok(parts.includes('503§count§add§001'), 'Should contain VRM count add 001');
+        assert.ok(parts.includes('503§count§a§001'), 'Should contain VRM count add 001');
         assert.ok(parts.includes('305§000§Count: !count!'), 'Should contain LGS 000 Count: !count!');
         assert.ok(parts.includes('202§inf'), 'Should contain LOP inf');
         assert.ok(parts.includes('202§e'), 'Should contain LOP end');

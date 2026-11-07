@@ -398,7 +398,7 @@ export async function compileNanoSDK(
                         errors.push(`Line ${li + 5}: VRM value '${a[2]}' must be a number or variable reference (!var!).`);
                         break;
                     }
-                    out.push('503§' + nsc_pad(a[0]) + '§' + op + '§' + nsc_pad(a[2]));
+                    out.push('503§' + nsc_pad(a[0]) + '§' + nsc_op(op) + '§' + nsc_pad(a[2]));
                     continue;
                 }
             case 'VCJ':
@@ -595,4 +595,14 @@ export function isCompilerNumericOrRef(s: string): boolean {
     if (/^-?\d+$/.test(s)) return true;          // plain number
     if (s.startsWith('!')) return true;            // variable reference (!var! or !var)
     return false;
+}
+
+export function nsc_op(s: string): string {
+    switch (s.toLowerCase()) {
+        case 'add': return 'a';
+        case 'sub': return 's';
+        case 'mul': return 'm';
+        case 'div': return 'd';
+        default: return s;
+    }
 }

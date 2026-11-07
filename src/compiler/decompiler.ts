@@ -114,8 +114,10 @@ function decodeOpcode(op: string, args: string[]): { text: string; description: 
             return { text: `DVR ${args[0]} ${args[1]}`, description: `Define variable '${args[0]}' with initial value '${args[1]}'` };
         case '502':
             return { text: `SVR ${args[0]} ${args[1]}`, description: `Set variable '${args[0]}' to value '${args[1]}'` };
-        case '503':
-            return { text: `VRM ${args[0]} ${args[1]} ${args[2]}`, description: `Variable math: '${args[0]}' = '${args[0]}' ${args[1]} '${args[2]}'` };
+        case '503': {
+            const vrmOp = ({ a: 'add', s: 'sub', m: 'mul', d: 'div' } as Record<string, string>)[args[1]] || args[1];
+            return { text: `VRM ${args[0]} ${vrmOp} ${args[2]}`, description: `Variable math: '${args[0]}' = '${args[0]}' ${vrmOp} '${args[2]}'` };
+        }
         case '504':
             return { text: `VCJ ${args[0]} ${args.slice(1).join(' ')}`, description: `Append '${args.slice(1).join(' ')}' to variable '${args[0]}'` };
         case '000':
