@@ -261,7 +261,7 @@
         "nanosdk.diagnostics.warnOnUnpaddedNumbers": {
           "type": "boolean",
           "default": true,
-          "description": "Show hints/warnings when number parameters are not padded to 3 digits (e.g. 005 instead of 5)."
+          "description": "NanoSDK 2026.x only (ignored on 2027.1). Show hints/warnings when number parameters are not padded to 3 digits (e.g. 005 instead of 5)."
         }
       }
     }
