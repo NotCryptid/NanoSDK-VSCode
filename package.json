@@ -2,7 +2,7 @@
   "name": "nanosdk-vscode",
   "displayName": "NanoSDK",
   "description": "Full NanoSDK language support for MicroOS: syntax highlighting, real-time error checking, compilation to .nsa, and interactive Micro Paint .mpi icon creator.",
-  "version": "1.2.0",
+  "version": "1.3.2",
   "publisher": "Cryptid",
   "icon": "icon.png",
   "repository": {
@@ -31,7 +31,8 @@
   "activationEvents": [
     "onLanguage:nanosdk",
     "onCustomEditor:nanosdk.microPaintEditor",
-    "onCommand:nanosdk.run"
+    "onCommand:nanosdk.run",
+    "onCommand:nanosdk.package"
   ],
   "contributes": {
     "languages": [
@@ -120,6 +121,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "nanosdk.package",
+        "title": "Package to NSA (.nsa)",
+        "category": "NanoSDK",
+        "icon": "$(play)"
+      },
+      {
         "command": "nanosdk.run",
         "title": "Run in NanoSDK Runtime",
         "category": "NanoSDK",
@@ -165,7 +172,12 @@
         },
         {
           "command": "nanosdk.compile",
-          "when": "editorLangId == nanosdk",
+          "when": "(editorLangId == nanosdk) && !nanosdk.usePackager",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nanosdk.package",
+          "when": "(editorLangId == nanosdk) && nanosdk.usePackager",
           "group": "navigation@1"
         },
         {
@@ -177,7 +189,12 @@
       "explorer/context": [
         {
           "command": "nanosdk.compile",
-          "when": "resourceExtname == .nsp",
+          "when": "(resourceExtname == .nsp) && !nanosdk.usePackager",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "nanosdk.package",
+          "when": "(resourceExtname == .nsp) && nanosdk.usePackager",
           "group": "7_modification@1"
         },
         {
@@ -194,13 +211,28 @@
       "editor/context": [
         {
           "command": "nanosdk.compile",
-          "when": "editorLangId == nanosdk",
+          "when": "(editorLangId == nanosdk) && !nanosdk.usePackager",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "nanosdk.package",
+          "when": "(editorLangId == nanosdk) && nanosdk.usePackager",
           "group": "1_modification@1"
         },
         {
           "command": "nanosdk.formatPad",
           "when": "editorLangId == nanosdk",
           "group": "1_modification@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "nanosdk.compile",
+          "when": "!nanosdk.usePackager"
+        },
+        {
+          "command": "nanosdk.package",
+          "when": "nanosdk.usePackager"
         }
       ]
     },
@@ -209,12 +241,14 @@
       "properties": {
         "nanosdk.compiler.version": {
           "type": "string",
-          "default": "2026.x",
+          "default": "2027.1",
           "enum": [
-            "2026.x"
+            "2026.x",
+            "2027.1"
           ],
           "enumDescriptions": [
-            "NanoSDK Compiler 2026.x — Compiled binary will work on MicroOS 0.1.0-1.1.0"
+            "NanoSDK Compiler 2026.x — Compiled binary will work on MicroOS 0.1.0-1.1.0",
+            "NanoSDK Packager 2027.1 — Packages plain source for MicroOS builds after 1.1.0 (3-line header, 0-based indexes, LGO takes a plain count)"
           ],
           "description": "Select the NanoSDK compiler version. This determines which commands and features are available.",
           "order": 0
@@ -233,7 +267,9 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "sync-runtime": "node scripts/sync-runtime.js",
+    "check-runtime": "node scripts/sync-runtime.js --check",
+    "vscode:prepublish": "node scripts/sync-runtime.js && npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "node ./out/test/compiler.test.js"

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { compileNanoSDK, nsc_pad } from './compiler/compiler';
+import { packageNanoSDK, isPackage2027, packageToLegacySource } from './compiler/packager';
 import { decompileNSA } from './compiler/decompiler';
 import { runInRuntime } from './runtime/runtimePanel';
 import { updateDiagnostics } from './diagnostics/diagnostics';
@@ -18,6 +19,17 @@ AB1B1132
 BB131122
 BB133122
 03332220`;
+
+/** Reads nanosdk.compiler.version ("2026.x" compiles, anything newer packages; default 2027.1). */
+function getCompilerVersion(): string {
+    return vscode.workspace.getConfiguration('nanosdk').get<string>('compiler.version', '2027.1');
+}
+
+function buildNSA(source: string, sourceFilePath: string) {
+    return getCompilerVersion() !== '2026.x'
+        ? packageNanoSDK(source, { sourceFilePath })
+        : compileNanoSDK(source, { sourceFilePath });
+}
 
 export function activate(context: vscode.ExtensionContext) {
     // 1. Diagnostic Collection
@@ -66,10 +78,22 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 4. Status Bar Item for 1-Click Compilation
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = 'nanosdk.compile';
-    statusBarItem.text = '$(play) Compile to NSA';
-    statusBarItem.tooltip = 'Compile NanoSDK Project to MicroOS Application (.nsa)';
     context.subscriptions.push(statusBarItem);
+
+    // "Compile" under 2026.x, "Package" under every newer version
+    function refreshBuildLabels() {
+        const packager = getCompilerVersion() !== '2026.x';
+        vscode.commands.executeCommand('setContext', 'nanosdk.usePackager', packager);
+        statusBarItem.command = packager ? 'nanosdk.package' : 'nanosdk.compile';
+        statusBarItem.text = packager ? '$(play) Package to NSA' : '$(play) Compile to NSA';
+        statusBarItem.tooltip = packager
+            ? 'Package NanoSDK Project to MicroOS Application (.nsa)'
+            : 'Compile NanoSDK Project to MicroOS Application (.nsa)';
+    }
+    refreshBuildLabels();
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('nanosdk.compiler.version')) { refreshBuildLabels(); }
+    }));
 
     function updateStatusBar(editor?: vscode.TextEditor) {
         if (editor && editor.document.languageId === 'nanosdk') {
@@ -81,8 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
     updateStatusBar(vscode.window.activeTextEditor);
 
     // 5. Command: Compile to NSA
-    context.subscriptions.push(
-        vscode.commands.registerCommand('nanosdk.compile', async (uri?: vscode.Uri) => {
+    const buildCommand = async (uri?: vscode.Uri) => {
             let targetUri = uri;
             if (!targetUri) {
                 const editor = vscode.window.activeTextEditor;
@@ -97,9 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
             const sourceCode = doc.getText();
             const sourcePath = targetUri.fsPath;
 
-            const res = await compileNanoSDK(sourceCode, {
-                sourceFilePath: sourcePath
-            });
+            const res = await buildNSA(sourceCode, sourcePath);
 
             if (!res.success || !res.nsaContent) {
                 const errMsg = res.errors.join('\n');
@@ -114,7 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             fs.writeFileSync(nsaPath, res.nsaContent, 'utf8');
 
-            let msg = `Successfully compiled '${res.metadata?.appName || baseName}' to ${path.basename(nsaPath)}!`;
+            let msg = `Successfully ${getCompilerVersion() !== '2026.x' ? 'packaged' : 'compiled'} '${res.metadata?.appName || baseName}' to ${path.basename(nsaPath)}!`;
             if (res.warnings.length > 0) {
                 msg += ` (${res.warnings.length} warning(s))`;
             }
@@ -126,8 +147,9 @@ export function activate(context: vscode.ExtensionContext) {
             } else if (action === 'Open Folder') {
                 vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(nsaPath));
             }
-        })
-    );
+    };
+    context.subscriptions.push(vscode.commands.registerCommand('nanosdk.compile', buildCommand));
+    context.subscriptions.push(vscode.commands.registerCommand('nanosdk.package', buildCommand));
 
     // Command: Run in the built-in NanoSDK runtime (compiles .nsp first, or runs a .nsa directly)
     context.subscriptions.push(
@@ -140,14 +162,26 @@ export function activate(context: vscode.ExtensionContext) {
             const ext = path.extname(targetUri.fsPath).toLowerCase();
             const baseName = path.basename(targetUri.fsPath, ext);
             if (ext === '.nsa') {
-                const content = fs.readFileSync(targetUri.fsPath, 'utf8');
+                let content = fs.readFileSync(targetUri.fsPath, 'utf8');
+                if (isPackage2027(content)) {
+                    const legacy = await compileNanoSDK(packageToLegacySource(content), { sourceFilePath: targetUri.fsPath });
+                    if (!legacy.success || !legacy.nsaContent) {
+                        vscode.window.showErrorMessage(`Could not run package in the built-in runtime:\n${legacy.errors.join('\n')}`);
+                        return;
+                    }
+                    content = legacy.nsaContent;
+                }
                 runInRuntime(context, content, content.split('~')[0] || baseName, targetUri.fsPath);
                 return;
             }
             const doc = await vscode.workspace.openTextDocument(targetUri);
-            const res = await compileNanoSDK(doc.getText(), { sourceFilePath: targetUri.fsPath });
+            let res = await buildNSA(doc.getText(), targetUri.fsPath);
+            if (res.success && res.nsaContent && getCompilerVersion() !== '2026.x') {
+                // 2027.1 packages run in the preview via the 2026.x executor
+                res = await compileNanoSDK(packageToLegacySource(res.nsaContent), { sourceFilePath: targetUri.fsPath });
+            }
             if (!res.success || !res.nsaContent) {
-                vscode.window.showErrorMessage(`NanoSDK Compilation Failed:\n${res.errors.join('\n')}`);
+                vscode.window.showErrorMessage(`NanoSDK ${getCompilerVersion() !== '2026.x' ? 'Packaging' : 'Compilation'} Failed:\n${res.errors.join('\n')}`);
                 return;
             }
             runInRuntime(context, res.nsaContent, res.metadata?.appName || baseName, targetUri.fsPath);
@@ -176,7 +210,9 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             // Create .nsp project file
-            const nspContent = `DAN ${appName}
+            const legacy = getCompilerVersion() === '2026.x';
+            const nspContent = legacy
+                ? `DAN ${appName}
 DAI ${safeName}.mpi
 ASM main
 TXP 020
@@ -198,6 +234,32 @@ WHN end
 WHN sel 003
   SVR count 000
   LGS 000 Count: 000
+WHN end
+
+LOP inf
+LOP end
+`
+                : `DAN ${appName}
+DAI ${safeName}.mpi
+ASM main
+
+// NanoSDK Project: ${appName}
+DVR count 0
+CLG ful
+LGH auto
+LGO 3
+Count: !count!
+Increment
+Reset
+
+WHN sel 1
+  VRM count add 1
+  LGS 0 Count: !count!
+WHN end
+
+WHN sel 2
+  SVR count 0
+  LGS 0 Count: 0
 WHN end
 
 LOP inf

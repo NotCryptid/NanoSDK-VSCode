@@ -13,7 +13,10 @@ export function updateDiagnostics(
 
     const diagnostics: vscode.Diagnostic[] = [];
     const config = vscode.workspace.getConfiguration('nanosdk');
-    const warnUnpadded = config.get<boolean>('diagnostics.warnOnUnpaddedNumbers', true);
+    const is2027 = config.get<string>('compiler.version', '2027.1') !== '2026.x';
+    // 2027.1: 3-line header (TXP is gone), no number padding, LGO takes a plain count
+    const warnUnpadded = !is2027 && config.get<boolean>('diagnostics.warnOnUnpaddedNumbers', true);
+    const headerLines = is2027 ? 3 : 4;
 
     const text = document.getText();
     const lineCount = document.lineCount;
@@ -65,12 +68,14 @@ export function updateDiagnostics(
     }
 
     // Header validation (First 4 non-empty lines)
-    if (nonCommentLines.length < 4) {
+    if (nonCommentLines.length < headerLines) {
         const lastLineIdx = Math.max(0, lineCount - 1);
         const lastLine = document.lineAt(lastLineIdx);
         diagnostics.push(new vscode.Diagnostic(
             new vscode.Range(0, 0, lastLineIdx, lastLine.text.length),
-            'NanoSDK project is missing required header lines. First 4 lines must be: DAN [name], DAI [icon], ASM [submenu], TXP [pos].',
+            headerLines === 3
+                ? 'NanoSDK project is missing required header lines. First 3 lines must be: DAN [name], DAI [icon], ASM [submenu].'
+                : 'NanoSDK project is missing required header lines. First 4 lines must be: DAN [name], DAI [icon], ASM [submenu], TXP [pos].',
             vscode.DiagnosticSeverity.Error
         ));
     } else {
@@ -106,16 +111,16 @@ export function updateDiagnostics(
             diagnostics
         );
 
-        // Line 4: TXP
+        // Line 4: TXP (2026.x only)
         const txpLine = nonCommentLines[3];
-        validateHeaderCommand(
+        if (headerLines === 4) validateHeaderCommand(
             txpLine,
             'TXP',
             'TXP [X Position]',
             'Header Line 4 must define Title X Position (e.g. TXP 020).',
             diagnostics
         );
-        if (txpLine.tokens.length >= 2 && txpLine.tokens[0].toUpperCase() === 'TXP') {
+        if (headerLines === 4 && txpLine.tokens.length >= 2 && txpLine.tokens[0].toUpperCase() === 'TXP') {
             checkNumberPadding(txpLine.lineIndex, txpLine.tokens[1], txpLine.text, warnUnpadded, diagnostics);
         }
     }
@@ -125,7 +130,15 @@ export function updateDiagnostics(
     let lgoExpected = 0;
     let lgoOriginLine = -1;
 
-    for (let i = 4; i < nonCommentLines.length; i++) {
+    // A leftover TXP line (2026.x projects) is ignored by the 2027.1 packager
+    let bodyStart = headerLines;
+    if (is2027 && nonCommentLines.length > 3 && nonCommentLines[3].tokens[0].toUpperCase() === 'TXP') {
+        bodyStart = 4;
+        diagnostics.push(createLineDiag(nonCommentLines[3].lineIndex, nonCommentLines[3].text,
+            "TXP is ignored in NanoSDK 2027.1 and newer: the title position is calculated automatically. You can remove this line.",
+            vscode.DiagnosticSeverity.Warning));
+    }
+    for (let i = bodyStart; i < nonCommentLines.length; i++) {
         const item = nonCommentLines[i];
         const tk = item.tokens;
         if (tk.length === 0) continue;
@@ -232,7 +245,7 @@ export function updateDiagnostics(
                 } else if (sub === 'sel') {
                     blockStack.push({ type: 'WHN', lineIndex: item.lineIndex });
                     if (args.length < 2) {
-                        diagnostics.push(createLineDiag(item.lineIndex, item.text, "WHN sel requires 1-based index parameter (e.g. WHN sel 001).", vscode.DiagnosticSeverity.Error));
+                        diagnostics.push(createLineDiag(item.lineIndex, item.text, is2027 ? "WHN sel requires a 0-based index parameter (e.g. WHN sel 1)." : "WHN sel requires 1-based index parameter (e.g. WHN sel 001).", vscode.DiagnosticSeverity.Error));
                     } else if (warnUnpadded && isNumeric(args[1])) {
                         checkNumberPadding(item.lineIndex, args[1], item.text, warnUnpadded, diagnostics);
                     }
@@ -286,12 +299,16 @@ export function updateDiagnostics(
             }
 
             case 'LGO': {
-                if (args.length < 1 || !args[0].toLowerCase().startsWith('str')) {
-                    diagnostics.push(createLineDiag(item.lineIndex, item.text, "LGO requires 'strN' parameter (e.g. LGO str3).", vscode.DiagnosticSeverity.Error));
+                if (args.length < 1 || (is2027 ? !/^\d+$/.test(args[0]) : !args[0].toLowerCase().startsWith('str'))) {
+                    diagnostics.push(createLineDiag(item.lineIndex, item.text, is2027
+                        ? "LGO requires a plain item count (e.g. LGO 3)."
+                        : "LGO requires 'strN' parameter (e.g. LGO str3).", vscode.DiagnosticSeverity.Error));
                 } else {
-                    const num = parseInt(args[0].toLowerCase().substring(3), 10);
+                    const num = parseInt(is2027 ? args[0] : args[0].toLowerCase().substring(3), 10);
                     if (isNaN(num) || num <= 0) {
-                        diagnostics.push(createLineDiag(item.lineIndex, item.text, "LGO count must be a positive integer (e.g. LGO str3).", vscode.DiagnosticSeverity.Error));
+                        diagnostics.push(createLineDiag(item.lineIndex, item.text, is2027
+                            ? "LGO count must be a positive integer (e.g. LGO 3)."
+                            : "LGO count must be a positive integer (e.g. LGO str3).", vscode.DiagnosticSeverity.Error));
                     } else {
                         lgoExpected = num;
                         lgoOriginLine = item.lineIndex;

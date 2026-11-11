@@ -168,7 +168,6 @@ class SimpleMenu extends ExtendableSprite {
         if (!this.scrollbarEnabled) return null;
         const totalRows = this.items.length;
         const visibleRows = this.visibleRowCount();
-        if (totalRows <= visibleRows) return null;
 
         const thumbW = 6;
         const gapW = LOGICAL_W - (drawLeft + this.width);
@@ -177,7 +176,11 @@ class SimpleMenu extends ExtendableSprite {
         const margin = SimpleMenu.SCROLLBAR_MARGIN;
         const trackH = Math.max(0, this.height - margin * 2);
         const maxOffset = this.maxRowOffset();
-        const h = Math.max(thumbW, (visibleRows / totalRows) * trackH);
+        // Nothing to scroll: the thumb fills the whole track (same as MicroOS's
+        // updateScrollBar), so LSB on always shows a scrollbar.
+        const h = totalRows <= visibleRows
+            ? trackH
+            : Math.max(thumbW, (visibleRows / totalRows) * trackH);
         const y = drawTop + margin + (maxOffset > 0 ? (this.rowOffset / maxOffset) * (trackH - h) : 0);
         return { x, y, w: thumbW, h };
     }
@@ -188,6 +191,7 @@ class SimpleMenu extends ExtendableSprite {
         const totalRows = this.items.length;
         const visibleRows = this.visibleRowCount();
         const trackH = Math.max(0, this.height - SimpleMenu.SCROLLBAR_MARGIN * 2);
+        if (totalRows <= visibleRows) return 0; // full-track thumb: no travel
         const thumbH = Math.max(6, (visibleRows / totalRows) * trackH);
         return trackH - thumbH;
     }

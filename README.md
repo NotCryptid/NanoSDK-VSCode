@@ -46,6 +46,17 @@ ASM [main]                    // Line 3: Application Submenu
 TXP [020]                     // Line 4: Title X Position (padded)
 ```
 
+### NanoSDK 2027.1 (`nanosdk.compiler.version`)
+Set `nanosdk.compiler.version` to `2027.1` to use the new packager, which mirrors MicroOS's own. It ships your plain source (validated, comments and indentation stripped) instead of compiled opcodes, and MicroOS decodes it when the app opens.
+
+- 3-line header (`DAN`, `DAI`, `ASM`). `TXP` is gone: the title position is calculated automatically. A leftover `TXP` line is ignored with a warning.
+- All indexes are 0-based (`LGS`, `LGV`, `LGR`, `LGH`, `WHN sel`).
+- `LGO` takes a plain count (`LGO 3`, not `LGO str3`).
+- A non-numeric `LOP` count, a bad `LOP :BLW` condition or any malformed command fails packaging (MicroOS error 301).
+- Number padding is not required.
+- Packages only run on MicroOS builds after 1.1.0. The built-in **Run** preview supports them by translating the package back to 2026.x form (TXP, `LGO strN`, 1-based `WHN sel`) before running, so it uses the 2026.x executor rather than MicroOS's new one.
+- A `TXP` line is reported as a warning (it is ignored).
+
 ### Basic Commands
 - `PRN [string]` — Displays popup message. Supports variable interpolation with `!var!`.
 - `END [optional error]` — Closes the application.

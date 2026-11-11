@@ -27,6 +27,14 @@ export function runInRuntime(context: vscode.ExtensionContext, nsaContent: strin
 <html><head><meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${panel.webview.cspSource}; style-src ${panel.webview.cspSource} 'unsafe-inline'; img-src ${panel.webview.cspSource} data:;" />
 <link rel="stylesheet" href="${uri('style.css')}" />
+<style>
+/* Extension-owned layout (runtime/style.css is synced from NanoSDK-Desktop):
+   VS Code pads the webview body, and shim.js sizes #screen to the largest
+   box of the app's own aspect ratio that fits #stage. */
+html, body { margin: 0 !important; padding: 0 !important; overflow: hidden; }
+#stage { position: fixed; inset: 0; width: auto; height: auto; display: flex; align-items: center; justify-content: center; }
+#screen { flex: none; }
+</style>
 </head>
 <body data-dark="${isDark() ? '1' : '0'}">
 <div id="stage"><canvas id="screen"></canvas></div>

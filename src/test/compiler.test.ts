@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compileNanoSDK, parseIconFileContent, resolveLocalIconSync } from '../compiler/compiler';
 import { decompileNSA } from '../compiler/decompiler';
+import { packageNanoSDK, nsc_title_x, isPackage2027, packageToLegacySource } from '../compiler/packager';
 
 async function runAllTests() {
     console.log('🧪 Running NanoSDK Extension Automated Tests...\n');
@@ -154,6 +155,84 @@ LOP end`;
         assert.strictEqual(res.success, false);
         assert.ok(res.errors.length > 0);
     });
+    // MARK: 2027.1 packager
+    await test('2027.1 package: plain source, 3-line header, auto title X', async () => {
+        const source = `DAN Counter
+DAI default
+ASM main
+
+// comment line
+DVR count 0
+CLG ful
+LGO 3
+Count: !count!
+Add
+Reset
+WHN sel 1
+  VRM count add 1
+WHN end
+LOP inf
+LOP end`;
+        const res = await packageNanoSDK(source);
+        assert.strictEqual(res.success, true, res.errors.join('; '));
+        const parts = res.nsaContent!.split('~');
+        assert.deepStrictEqual(parts.slice(0, 3), ['Counter', 'default', 'main']);
+        assert.strictEqual(parts[3], '21'); // floor(6*7/2)+1 - 1 blank leading column of "C"
+        assert.strictEqual(parts[4], 'DVR count 0');
+        assert.ok(!res.nsaContent!.includes('§'), 'package must be plain source');
+        assert.ok(!res.nsaContent!.includes('comment'), 'comments are stripped');
+        assert.ok(!res.nsaContent!.includes('  VRM'), 'indentation is stripped');
+    });
+
+    await test('2027.1 package: legacy TXP line is ignored with a warning', async () => {
+        const res = await packageNanoSDK('DAN A\nDAI default\nASM main\nTXP 020\nPRN hi');
+        assert.strictEqual(res.success, true);
+        assert.strictEqual(res.nsaContent!.split('~')[4], 'PRN hi');
+        assert.ok(res.warnings.some(w => w.includes('TXP')));
+    });
+
+    await test('2027.1 package: non-numeric LOP count is rejected (no infinite loop)', async () => {
+        const res = await packageNanoSDK('DAN A\nDAI default\nASM main\nLOP abc\nLOP end');
+        assert.strictEqual(res.success, false);
+        assert.ok(res.errors.some(e => e.includes('Line 4')), res.errors.join('; '));
+    });
+
+    await test('2027.1 package: old LGO strN and short LGO are rejected', async () => {
+        const old = await packageNanoSDK('DAN A\nDAI default\nASM main\nLGO str2\na\nb');
+        assert.strictEqual(old.success, false);
+        const short = await packageNanoSDK('DAN A\nDAI default\nASM main\nLGO 3\na');
+        assert.strictEqual(short.success, false);
+    });
+
+    await test('2027.1 package: invalid LOP :BLW condition is rejected', async () => {
+        const res = await packageNanoSDK('DAN A\nDAI default\nASM main\nLOP :BLW\nIFB nope\nLOP end');
+        assert.strictEqual(res.success, false);
+    });
+
+    await test('2027.1 package: missing header fails', async () => {
+        const res = await packageNanoSDK('DAN A\nDAI default');
+        assert.strictEqual(res.success, false);
+    });
+
+    await test('title X matches MicroOS formula', () => {
+        assert.strictEqual(nsc_title_x('I'), 3 + 1 - 1); // 6*1/2 + 1 - 1 blank leading column
+        assert.strictEqual(nsc_title_x(''), 1);
+    });
+
+    await test('2027.1 package round-trips to a runnable 2026.x binary (preview bridge)', async () => {
+        const pkg = await packageNanoSDK('DAN Counter\nDAI default\nASM main\nDVR count 0\nCLG ful\nLGO 3\nCount: !count!\nAdd\nReset\nWHN sel 1\n VRM count add 1\nWHN end\nWHN sel 2\n SVR count 0\nWHN end\nLOP inf\nLOP end');
+        assert.strictEqual(pkg.success, true, pkg.errors.join('; '));
+        assert.strictEqual(isPackage2027(pkg.nsaContent!), true);
+        const legacySrc = packageToLegacySource(pkg.nsaContent!);
+        assert.ok(legacySrc.includes('TXP 21'), 'TXP restored from the package title X');
+        assert.ok(legacySrc.includes('LGO str3'), 'LGO gets its str prefix back');
+        assert.ok(legacySrc.includes('WHN sel 2') && legacySrc.includes('WHN sel 3'), 'WHN sel becomes 1-based');
+        const bin = await compileNanoSDK(legacySrc);
+        assert.strictEqual(bin.success, true, bin.errors.join('; '));
+        assert.strictEqual(isPackage2027(bin.nsaContent!), false, 'a 2026.x binary is not mistaken for a package');
+        assert.ok(bin.nsaContent!.includes('401§sel§002'));
+    });
+
 
     console.log(`\n========================================`);
     console.log(`Total Tests: ${passed + failed} | Passed: ${passed} | Failed: ${failed}`);
